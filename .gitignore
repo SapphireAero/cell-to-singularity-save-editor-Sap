@@ -1,0 +1,18 @@
+# Binaries
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+
+# Saves & Exports
+*.gd
+*.json
+*.bak
+*.log
+
+# IDE & OS
+.vs/
+.vscode/
+.DS_Store
+Thumbs.db
