@@ -11,27 +11,29 @@ echo =================================================================
 echo.
 echo   [1] 查看当前存档状态（各货币、资源与统计概况）
 echo   [2] 修改粉色达尔文素 (Darwinium)
-echo   [3] 修改熵 (Entropy)
-echo   [4] 修改想法 (Ideas)
-echo   [5] 修改中生代突变剂 (Mutagen / 恐龙化石)
-echo   [6] 修改超越篇星尘/暗物质 (Stardust / Dark Matter)
-echo   [7] 导出完整存档为 JSON 格式
-echo   [8] 创建当前存档的安全备份
-echo   [9] 重新编译 SaveEditor 源码
+echo   [3] 修改罗吉特 (Logits / Doobers)
+echo   [4] 修改熵 (Entropy)
+echo   [5] 修改想法 (Ideas)
+echo   [6] 修改中生代突变剂 (Mutagen / 恐龙化石)
+echo   [7] 修改超越篇星尘/暗物质 (Stardust / Dark Matter)
+echo   [8] 导出完整存档为 JSON 格式
+echo   [9] 创建当前存档的安全备份
+echo   [10] 重新编译 SaveEditor 源码
 echo   [0] 退出
 echo.
 echo =================================================================
-set /p choice="请输入选项编号 [0-9]: "
+set /p choice="请输入选项编号 [0-10]: "
 
 if "%choice%"=="1" goto STATUS
 if "%choice%"=="2" goto SET_DARWIN
-if "%choice%"=="3" goto SET_ENTROPY
-if "%choice%"=="4" goto SET_IDEAS
-if "%choice%"=="5" goto SET_MUTAGEN
-if "%choice%"=="6" goto SET_STARDUST
-if "%choice%"=="7" goto EXPORT
-if "%choice%"=="8" goto BACKUP
-if "%choice%"=="9" goto COMPILE
+if "%choice%"=="3" goto SET_LOGIT
+if "%choice%"=="4" goto SET_ENTROPY
+if "%choice%"=="5" goto SET_IDEAS
+if "%choice%"=="6" goto SET_MUTAGEN
+if "%choice%"=="7" goto SET_STARDUST
+if "%choice%"=="8" goto EXPORT
+if "%choice%"=="9" goto BACKUP
+if "%choice%"=="10" goto COMPILE
 if "%choice%"=="0" exit /b 0
 goto MENU
 
@@ -50,6 +52,17 @@ echo [提示] 建议在游戏关闭状态下修改。
 set /p val="请输入想要设置的达尔文素数量 (默认 100000): "
 if "%val%"=="" set val=100000
 bin\SaveEditor.exe set-darwin %val%
+echo.
+pause
+goto MENU
+
+:SET_LOGIT
+cls
+echo -----------------------------------------------------------------
+echo [提示] 建议在游戏关闭状态下修改。
+set /p val="请输入想要设置的罗吉特数量 (默认 100000): "
+if "%val%"=="" set val=100000
+bin\SaveEditor.exe set-logit %val%
 echo.
 pause
 goto MENU

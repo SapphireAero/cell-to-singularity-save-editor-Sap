@@ -80,6 +80,17 @@ namespace CellToSingularitySaveTool {
                     ModifyCurrency(saveDir, savePath, save2Path, "bank_c", "stat_currency", darwinVal, "达尔文素 (粉色立方体)");
                     break;
 
+                case "set-logit":
+                case "set-logits":
+                case "set-doober":
+                    double logitVal = 0;
+                    if (args.Length < 2 || !double.TryParse(args[1], out logitVal)) {
+                        Console.WriteLine("用法: SaveEditor.exe set-logit <数量>");
+                        return;
+                    }
+                    ModifyMetaItem(saveDir, savePath, save2Path, "stat_doober", logitVal, "罗吉特 (Logits / Doobers)");
+                    break;
+
                 case "set-entropy":
                     double entropyVal = 0;
                     if (args.Length < 2 || !double.TryParse(args[1], out entropyVal)) {
@@ -144,6 +155,7 @@ namespace CellToSingularitySaveTool {
             Console.WriteLine("  export [输出路径.json]  将二进制存档解析并导出为可读的 JSON 文本");
             Console.WriteLine("  backup                  为当前存档创建带时间戳的安全副本");
             Console.WriteLine("  set-darwin  <数量>      修改粉色达尔文素 (如: set-darwin 100000)");
+            Console.WriteLine("  set-logit   <数量>      修改罗吉特 (Logits) (如: set-logit 100000)");
             Console.WriteLine("  set-entropy <数量>      修改熵数值 (如: set-entropy 1e12)");
             Console.WriteLine("  set-ideas   <数量>      修改想法数值 (如: set-ideas 1e12)");
             Console.WriteLine("  set-mutagen <数量>      修改中生代山谷突变剂 (如: set-mutagen 50000)");
@@ -186,6 +198,7 @@ namespace CellToSingularitySaveTool {
             PrintBankVal(save, "bank", "熵 (Entropy)");
             PrintBankVal(save, "bank_b", "想法 (Ideas)");
             PrintBankVal(save, "bank_c", "达尔文素 (Darwinium / 粉色立方体)");
+            PrintMetaItemVal(save, "stat_doober", "罗吉特 (Logits / Doobers)");
             PrintBankVal(save, "bank_d", "突变剂 (Mutagen / 恐龙化石)");
             PrintBankVal(save, "bank_e", "星尘/暗物质 (Stardust / Dark Matter)");
             PrintBankVal(save, "bank_f", "星座碎片 (Constellation Currency)");
@@ -204,6 +217,18 @@ namespace CellToSingularitySaveTool {
         static void PrintBankVal(SaveFile save, string key, string name) {
             string val = save.customVars.ContainsKey(key) ? save.customVars[key] : "0";
             Console.WriteLine(string.Format("  {0,-36} : {1}", name + " (" + key + ")", val));
+        }
+
+        static void PrintMetaItemVal(SaveFile save, string key, string name) {
+            if (save.metaVars.ContainsKey(key)) {
+                ItemSaveData item = save.metaVars[key];
+                FieldInfo ownedField = typeof(ItemSaveData).GetField("owned", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                FieldInfo expField = typeof(ItemSaveData).GetField("ownedExponent", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                double owned = (double)ownedField.GetValue(item);
+                long exp = (long)expField.GetValue(item);
+                string valStr = (exp == 0) ? owned.ToString() : string.Format("{0}e{1}", owned, exp);
+                Console.WriteLine(string.Format("  {0,-36} : {1}", name + " (" + key + ")", valStr));
+            }
         }
 
         static void PrintCustomVar(SaveFile save, string key, string name) {
@@ -231,6 +256,38 @@ namespace CellToSingularitySaveTool {
             }
 
             // 5. 写入主存档并同步校验存档
+            WriteSave(savePath, save);
+            try {
+                File.Copy(savePath, save2Path, true);
+            } catch {}
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine(string.Format("\n[修改成功] {0} 已从 {1} 更新为 {2}！", displayName, oldVal, amount));
+            Console.ResetColor();
+            Console.WriteLine("主存档 (savedGames.gd) 与校验存档 (savedGames2.gd) 已完成同步。");
+        }
+
+        static void ModifyMetaItem(string saveDir, string savePath, string save2Path, string key, double amount, string displayName) {
+            CreateBackup(saveDir, savePath);
+            SaveFile save = LoadSave(savePath);
+
+            if (!save.metaVars.ContainsKey(key)) {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[错误] metaVars 中未找到键: " + key);
+                Console.ResetColor();
+                return;
+            }
+
+            var item = save.metaVars[key];
+            FieldInfo ownedField = typeof(ItemSaveData).GetField("owned", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            FieldInfo expField = typeof(ItemSaveData).GetField("ownedExponent", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            double oldOwned = (double)ownedField.GetValue(item);
+            long oldExp = (long)expField.GetValue(item);
+            string oldVal = (oldExp == 0) ? oldOwned.ToString() : string.Format("{0}e{1}", oldOwned, oldExp);
+
+            item.bigOwned = new BigDouble(amount);
+            item.DoBeforeSerialize(save, key);
+
             WriteSave(savePath, save);
             try {
                 File.Copy(savePath, save2Path, true);

@@ -54,8 +54,10 @@ C:\Users\<你的用户名>\AppData\LocalLow\Computer Lunch\Cell to Singularity\
 ### 2.2 `metaVars` 字典（大数对象与统计字段）
 每个项为 `ItemSaveData` 类型（封装 `BreakInfinity.BigDouble`）：
 
-| 键名 | 描述 |
+| 键名 | 中文名称 / 描述 |
 | :--- | :--- |
+| **`stat_doober`** | **罗吉特 (Logits / Doobers)**（探索活动奖励货币，用于罗吉特控制台商店兑换特殊项目） |
+| `stat_doobers_unlocked` | 罗吉特控制台商店解锁状态 (1: 已解锁) |
 | `stat_currency` | 达尔文素历史累计获得统计 |
 | `stat_entropy` | 熵历史累计统计 |
 | `stat_science` | 想法历史累计统计 |
@@ -78,13 +80,14 @@ C:\Users\<你的用户名>\AppData\LocalLow\Computer Lunch\Cell to Singularity\
 
   [1] 查看当前存档状态（各货币、资源与统计概况）
   [2] 修改粉色达尔文素 (Darwinium)
-  [3] 修改熵 (Entropy)
-  [4] 修改想法 (Ideas)
-  [5] 修改中生代突变剂 (Mutagen / 恐龙化石)
-  [6] 修改超越篇星尘/暗物质 (Stardust / Dark Matter)
-  [7] 导出完整存档为 JSON 格式
-  [8] 创建当前存档的安全备份
-  [9] 重新编译 SaveEditor 源码
+  [3] 修改罗吉特 (Logits / Doobers)
+  [4] 修改熵 (Entropy)
+  [5] 修改想法 (Ideas)
+  [6] 修改中生代突变剂 (Mutagen / 恐龙化石)
+  [7] 修改超越篇星尘/暗物质 (Stardust / Dark Matter)
+  [8] 导出完整存档为 JSON 格式
+  [9] 创建当前存档的安全备份
+  [10] 重新编译 SaveEditor 源码
   [0] 退出
 ```
 
@@ -103,19 +106,22 @@ SaveEditor.exe status
 # 2. 将粉色达尔文素设置为 100,000
 SaveEditor.exe set-darwin 100000
 
-# 3. 将熵修改为 1e12 (一万亿)
+# 3. 将罗吉特 (Logits) 设置为 100,000
+SaveEditor.exe set-logit 100000
+
+# 4. 将熵修改为 1e12 (一万亿)
 SaveEditor.exe set-entropy 1000000000000
 
-# 4. 将想法修改为 1e12
+# 5. 将想法修改为 1e12
 SaveEditor.exe set-ideas 1000000000000
 
-# 5. 将中生代突变剂修改为 50,000
+# 6. 将中生代突变剂修改为 50,000
 SaveEditor.exe set-mutagen 50000
 
-# 6. 将整个二进制存档导出为人类可读的 JSON 文件
+# 7. 将整个二进制存档导出为人类可读的 JSON 文件
 SaveEditor.exe export "my_save.json"
 
-# 7. 手动创建一个时间戳备份
+# 8. 手动创建一个时间戳备份
 SaveEditor.exe backup
 ```
 
