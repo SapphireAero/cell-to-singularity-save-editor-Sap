@@ -1,3 +1,16 @@
+/*
+ * ===========================================================================
+ *  Cell to Singularity 存档编辑器
+ *
+ *  原始项目 : https://github.com/hysltway/cell-to-singularity-save-editor
+ *             作者 hysltway
+ *  本文件   : SapphireAero 制作的修改版本（fork）
+ *
+ *  原项目未声明任何开源许可证，原始代码的著作权归原作者 hysltway 所有。
+ *  本文件不附带任何以本仓库名义发布的许可证。
+ *  相对原版的改动详见 README 第 6.2 节「来源与许可」。
+ * ===========================================================================
+ */
 using System;
 using System.IO;
 using System.Reflection;
@@ -7,26 +20,161 @@ using BreakInfinity;
 
 namespace CellToSingularitySaveTool {
     class Program {
-        // 默认游戏安装目录下的 Managed 依赖路径
-        public static string ManagedDir = @"D:\Software\Gaming\Steam\steamapps\common\Cell to Singularity\CellToSingularity_Data\Managed";
+        // 游戏依赖库 (Managed) 目录，运行时自动解析，详见 ResolveManagedDir()
+        public static string ManagedDir = null;
         
         static void Main(string[] args) {
+            // 记住进入时的控制台输出编码，退出前还原。
+            // Console.OutputEncoding = UTF8 会把控制台的输出代码页改成 65001 且不会自动还原，
+            // 导致程序退出后用户所在的 cmd 窗口残留 65001，后续中文输出全部变成乱码。
+            System.Text.Encoding originalOutputEncoding = Console.OutputEncoding;
             Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-            // 注册程序集动态解析（加载 Unity 与游戏自带的 DLL）
-            AppDomain.CurrentDomain.AssemblyResolve += (sender, resolveArgs) => {
-                string dllName = resolveArgs.Name.Split(',')[0] + ".dll";
-                string path = Path.Combine(ManagedDir, dllName);
-                if (File.Exists(path)) return Assembly.LoadFrom(path);
-                return null;
+            try {
+                // 注册程序集动态解析（加载 Unity 与游戏自带的 DLL）
+                AppDomain.CurrentDomain.AssemblyResolve += (sender, resolveArgs) => {
+                    if (string.IsNullOrEmpty(ManagedDir)) return null;
+                    string dllName = resolveArgs.Name.Split(',')[0] + ".dll";
+                    string path = Path.Combine(ManagedDir, dllName);
+                    if (File.Exists(path)) return Assembly.LoadFrom(path);
+                    return null;
+                };
+
+                try {
+                    // 需要游戏类型的命令，先定位 Managed 依赖目录
+                    if (NeedsGameAssemblies(args)) {
+                        ManagedDir = ResolveManagedDir();
+                        if (ManagedDir == null) {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("\n[错误] 未能定位游戏依赖库目录，无法继续。");
+                            Console.WriteLine("       可设置环境变量 CTS_MANAGED 指向 CellToSingularity_Data\\Managed 后重试。");
+                            Console.ResetColor();
+                            Environment.ExitCode = 1;
+                            return;
+                        }
+                    }
+
+                    Run(args);
+                } catch (Exception ex) {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("\n[错误] 运行异常: " + ex.Message);
+                    Console.WriteLine(ex.StackTrace);
+                    Console.ResetColor();
+                    Environment.ExitCode = 1;
+                }
+            } finally {
+                try { Console.OutputEncoding = originalOutputEncoding; } catch { }
+            }
+        }
+
+        // 只有不使用游戏类型的命令才允许跳过依赖库定位
+        static bool NeedsGameAssemblies(string[] args) {
+            if (args == null || args.Length == 0) return false;
+            string c = args[0].ToLowerInvariant();
+            return !(c == "help" || c == "-h" || c == "--help" || c == "/?");
+        }
+
+        // 定位游戏 Managed 依赖目录，按以下顺序尝试：
+        //   1) 环境变量 CTS_MANAGED
+        //   2) 扫描各盘符下的常见 Steam 安装布局
+        //   3) 交互式提示用户输入
+        static string ResolveManagedDir() {
+            string resolved = NormalizeManagedPath(Environment.GetEnvironmentVariable("CTS_MANAGED"));
+            if (resolved != null) return resolved;
+
+            resolved = ScanDrivesForManaged();
+            if (resolved != null) return resolved;
+
+            return PromptForManagedDir();
+        }
+
+        // 把用户或系统给出的各种路径形态归一化为 Managed 目录；失败返回 null
+        static string NormalizeManagedPath(string input) {
+            if (string.IsNullOrEmpty(input)) return null;
+
+            string p = input.Trim().Trim('"');
+            if (p.Length == 0) return null;
+
+            // 直接给出了 dll 路径时，取其所在目录
+            if (p.EndsWith("Assembly-CSharp.dll", StringComparison.OrdinalIgnoreCase)) {
+                try { p = Path.GetDirectoryName(p); } catch { return null; }
+                if (string.IsNullOrEmpty(p)) return null;
+            }
+
+            p = p.TrimEnd('\\', '/');
+            if (p.Length == 0) return null;
+
+            // 依次尝试用户可能粘贴的各个层级
+            string[] suffixes = new string[] {
+                "",                                                                     // 已经是 Managed 目录
+                @"\Managed",                                                            // 给的是 CellToSingularity_Data
+                @"\CellToSingularity_Data\Managed",                                     // 给的是游戏根目录
+                @"\Cell to Singularity\CellToSingularity_Data\Managed",                 // 给的是 common 目录
+                @"\common\Cell to Singularity\CellToSingularity_Data\Managed",          // 给的是 steamapps
+                @"\steamapps\common\Cell to Singularity\CellToSingularity_Data\Managed" // 给的是 Steam 库根目录
             };
 
-            try {
-                Run(args);
-            } catch (Exception ex) {
+            for (int i = 0; i < suffixes.Length; i++) {
+                string candidate = p + suffixes[i];
+                try {
+                    if (File.Exists(Path.Combine(candidate, "Assembly-CSharp.dll")))
+                        return Path.GetFullPath(candidate);
+                } catch { }
+            }
+            return null;
+        }
+
+        // 扫描 C: ~ K: 下常见的 Steam 安装位置
+        static string ScanDrivesForManaged() {
+            string[] layouts = new string[] {
+                @"\SteamLibrary\steamapps\common\Cell to Singularity",
+                @"\Steam\steamapps\common\Cell to Singularity",
+                @"\Program Files (x86)\Steam\steamapps\common\Cell to Singularity",
+                @"\Program Files\Steam\steamapps\common\Cell to Singularity",
+                @"\Games\Steam\steamapps\common\Cell to Singularity",
+                @"\Software\Gaming\Steam\steamapps\common\Cell to Singularity"
+            };
+
+            string drives = "CDEFGHIJK";
+            for (int i = 0; i < drives.Length; i++) {
+                for (int j = 0; j < layouts.Length; j++) {
+                    string resolved = NormalizeManagedPath(drives[i] + ":" + layouts[j]);
+                    if (resolved != null) return resolved;
+                }
+            }
+            return null;
+        }
+
+        static string PromptForManagedDir() {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine();
+            Console.WriteLine("[提示] 未能自动定位游戏依赖库 (Assembly-CSharp.dll)。");
+            Console.ResetColor();
+            Console.WriteLine("       请粘贴下列任意一种路径，程序会自动解析：");
+            Console.WriteLine("         - 游戏根目录   : ...\\steamapps\\common\\Cell to Singularity");
+            Console.WriteLine("         - Data 目录    : ...\\CellToSingularity_Data");
+            Console.WriteLine("         - Managed 目录 : ...\\CellToSingularity_Data\\Managed");
+            Console.WriteLine("         - dll 完整路径 : ...\\Managed\\Assembly-CSharp.dll");
+            Console.WriteLine();
+            Console.WriteLine("       也可设置环境变量 CTS_MANAGED 以跳过此提示。");
+            Console.WriteLine();
+
+            while (true) {
+                Console.Write("  请输入路径 (直接回车退出): ");
+                string line = Console.ReadLine();
+                if (line == null || line.Trim().Length == 0) return null;
+
+                string resolved = NormalizeManagedPath(line);
+                if (resolved != null) {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("[已定位] " + resolved);
+                    Console.ResetColor();
+                    Console.WriteLine();
+                    return resolved;
+                }
+
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("\n[错误] 运行异常: " + ex.Message);
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine("[错误] 该路径下未找到 Assembly-CSharp.dll，请重试。");
                 Console.ResetColor();
             }
         }
@@ -46,6 +194,11 @@ namespace CellToSingularitySaveTool {
 
             if (cmd == "help" || cmd == "-h" || cmd == "--help") {
                 PrintHelp();
+                return;
+            }
+
+            if (cmd == "where" || cmd == "managed") {
+                Console.WriteLine("依赖库目录: " + ManagedDir);
                 return;
             }
 
@@ -161,6 +314,12 @@ namespace CellToSingularitySaveTool {
             Console.WriteLine("  set-mutagen <数量>      修改中生代山谷突变剂 (如: set-mutagen 50000)");
             Console.WriteLine("  set-stardust <数量>     修改超越篇星尘/暗物质");
             Console.WriteLine("  set-var <变量名> <数值> 直接修改 customVars 中的任意指定字段");
+            Console.WriteLine("  where                   显示自动定位到的游戏依赖库目录");
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine("免责声明: 非官方第三方工具，与 Computer Lunch 无任何关联；");
+            Console.WriteLine("          修改存档有风险，请先备份，使用后果自负。");
+            Console.ResetColor();
             Console.WriteLine();
         }
 
@@ -319,7 +478,9 @@ namespace CellToSingularitySaveTool {
         static void ExportToJson(string savePath, string exportFile) {
             SaveFile save = LoadSave(savePath);
 
-            using (StreamWriter sw = new StreamWriter(exportFile, false, System.Text.Encoding.UTF8)) {
+            // 注意：必须用 new UTF8Encoding(false) —— System.Text.Encoding.UTF8 会写入 UTF-8 BOM，
+            // 导致很多 JSON 解析器（jq / python json / 部分 IDE）无法直接读取该文件。
+            using (StreamWriter sw = new StreamWriter(exportFile, false, new System.Text.UTF8Encoding(false))) {
                 sw.WriteLine("{");
                 sw.WriteLine("  \"customVars\": {");
                 int cCount = 0;
